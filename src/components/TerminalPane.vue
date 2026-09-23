@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { backend } from "@/services";
@@ -10,6 +10,8 @@ const props = defineProps<{ session: TerminalSession }>();
 const emit = defineEmits<{ (e: "focus"): void }>();
 
 const host = ref<HTMLDivElement | null>(null);
+const bar = ref<HTMLDivElement | null>(null);
+const thumb = reactive({ h: 0, top: 0, show: false, dragging: false });
 
 const PALETTE = {
   dark: {
@@ -66,6 +68,8 @@ let detach: (() => void) | null = null;
 let ro: ResizeObserver | null = null;
 let resizeTimer: number | undefined;
 let removeContextMenu: (() => void) | null = null;
+let viewport: HTMLElement | null = null;
+let grabOffset = 0;
 
 function currentTheme(): "dark" | "light" {
   return document.documentElement.dataset.theme === "light" ? "light" : "dark";
@@ -95,10 +99,93 @@ function scheduleResize() {
   resizeTimer = window.setTimeout(() => {
     if (!term || !fit) return;
     fit.fit();
+    syncThumb();
     void backend.terminal
       .resize(props.session.id, term.cols, term.rows)
       .catch(() => {});
   }, 60);
+}
+
+/**
+ * The viewport's own scrollbar is off (see the `.xterm-viewport` rule in
+ * base.css): its arrow buttons clash with the pane chrome, and xterm's blanket
+ * `preventDefault()` on mousedown cancels a press-drag on it. This overlay thumb
+ * is plain DOM, so dragging it is just pointer math onto `scrollTop`. It is
+ * measured against the viewport itself, which the track is aligned to.
+ */
+function viewportEl(): HTMLElement | null {
+  // The viewport element only exists once the renderer has built it, so resolve
+  // it on demand rather than at mount.
+  if (!viewport) {
+    viewport = host.value?.querySelector<HTMLElement>(".xterm-viewport") ?? null;
+    // Wheel scrolling is suppressed on xterm's own `onScroll`, so the native
+    // scroll event is the only signal that covers every source of movement.
+    viewport?.addEventListener("scroll", syncThumb);
+  }
+  return viewport;
+}
+
+function track(): { top: number; height: number } | null {
+  const v = viewportEl();
+  if (!v) return null;
+  return { top: v.getBoundingClientRect().top, height: v.clientHeight };
+}
+
+function syncThumb() {
+  const t = track();
+  if (!t || !viewport) return;
+  const max = viewport.scrollHeight - viewport.clientHeight;
+  if (max <= 0) {
+    thumb.show = false;
+    return;
+  }
+  thumb.h = Math.max(30, (viewport.clientHeight / viewport.scrollHeight) * t.height);
+  thumb.top = (viewport.scrollTop / max) * (t.height - thumb.h);
+  thumb.show = true;
+}
+
+function moveTo(clientY: number) {
+  const t = track();
+  if (!t || !viewport) return;
+  const travel = t.height - thumb.h;
+  if (travel <= 0) return;
+  thumb.top = Math.min(Math.max(clientY - grabOffset - t.top, 0), travel);
+  viewport.scrollTop =
+    (thumb.top / travel) * (viewport.scrollHeight - viewport.clientHeight);
+}
+
+function onTrackDown(e: PointerEvent) {
+  const t = track();
+  if (!t || !bar.value) return;
+  const onThumb =
+    e.clientY >= t.top + thumb.top && e.clientY <= t.top + thumb.top + thumb.h;
+  grabOffset = onThumb ? e.clientY - (t.top + thumb.top) : thumb.h / 2;
+  thumb.dragging = true;
+  bar.value.setPointerCapture(e.pointerId);
+  moveTo(e.clientY);
+  e.preventDefault();
+}
+
+function onTrackMove(e: PointerEvent) {
+  if (thumb.dragging) moveTo(e.clientY);
+}
+
+// The track sits over the terminal's right edge, so a wheel gesture there would
+// otherwise scroll nothing at all.
+function onTrackWheel(e: WheelEvent) {
+  const v = viewportEl();
+  if (!v) return;
+  v.scrollTop += e.deltaY;
+  syncThumb();
+  e.preventDefault();
+}
+
+function onTrackUp(e: PointerEvent) {
+  thumb.dragging = false;
+  if (bar.value?.hasPointerCapture(e.pointerId)) {
+    bar.value.releasePointerCapture(e.pointerId);
+  }
+  syncThumb();
 }
 
 async function copySelection() {
@@ -117,7 +204,7 @@ onMounted(async () => {
     fontFamily:
       '"JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace',
     fontSize: 13,
-    lineHeight: 1.5,
+    lineHeight: 1.2,
     scrollback: 5000,
     cursorBlink: true,
     theme: PALETTE[currentTheme()],
@@ -126,6 +213,17 @@ onMounted(async () => {
   term.loadAddon(fit);
   term.open(host.value);
   fit.fit();
+
+  // Row height is the *measured* font box × lineHeight, and that measurement can
+  // land after the first fit — leaving a row count that overflows the host and
+  // eats its bottom padding. Refit once the renderer has drawn.
+  const firstRender = term.onRender(() => {
+    firstRender.dispose();
+    scheduleResize();
+  });
+  // Pin-to-bottom on output changes `scrollHeight` without a scroll event, and it
+  // lands after the write is parsed — sync on the next frame to read the result.
+  term.onWriteParsed(() => requestAnimationFrame(syncThumb));
 
   // Shells report their directory as an OSC 7 sequence on every prompt, so this
   // keeps `session.cwd` live even after the user `cd`s elsewhere — which is what
@@ -196,6 +294,8 @@ onBeforeUnmount(() => {
   detach?.();
   term?.dispose();
   term = null;
+  viewport?.removeEventListener("scroll", syncThumb);
+  viewport = null;
 });
 
 watch(
@@ -237,7 +337,27 @@ function closePane() {
         </svg>
       </button>
     </div>
-    <div ref="host" class="term-host"></div>
+    <div ref="host" class="term-host">
+      <div
+        v-show="thumb.show"
+        ref="bar"
+        class="term-bar"
+        :class="{ dragging: thumb.dragging }"
+        @pointerdown="onTrackDown"
+        @pointermove="onTrackMove"
+        @pointerup="onTrackUp"
+        @pointercancel="onTrackUp"
+        @wheel="onTrackWheel"
+      >
+        <div
+          class="term-thumb"
+          :style="{
+            height: `${thumb.h}px`,
+            transform: `translateY(${thumb.top}px)`,
+          }"
+        />
+      </div>
+    </div>
   </div>
 </template>
 
@@ -314,9 +434,36 @@ function closePane() {
   background: color-mix(in srgb, var(--danger) 14%, transparent);
 }
 .term-host {
+  --pad-top: 4px;
+  --pad-bottom: 6px;
+  position: relative;
   flex: 1;
   min-height: 0;
-  padding: 8px 6px 8px 12px;
+  padding: var(--pad-top) 8px var(--pad-bottom) 10px;
+  overflow: hidden;
   background: var(--term-bg);
+}
+.term-bar {
+  position: absolute;
+  top: var(--pad-top);
+  bottom: var(--pad-bottom);
+  right: 2px;
+  width: 9px;
+  z-index: 3;
+  touch-action: none;
+  cursor: default;
+}
+.term-thumb {
+  width: 100%;
+  border-radius: 999px;
+  background: var(--text-dim);
+  opacity: 0.35;
+  transition: opacity 0.15s;
+}
+.pane:hover .term-thumb {
+  opacity: 0.65;
+}
+.term-bar.dragging .term-thumb {
+  opacity: 1;
 }
 </style>

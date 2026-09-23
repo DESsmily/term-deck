@@ -93,6 +93,15 @@ button {
   background-clip: padding-box;
 }
 
+/* The terminal draws its own overlay thumb (see TerminalPane); the OS scrollbar
+ * is off here so its arrow buttons don't show through the pane chrome. */
+.xterm .xterm-viewport {
+  scrollbar-width: none;
+}
+.xterm .xterm-viewport::-webkit-scrollbar {
+  display: none;
+}
+
 /* Shared control surfaces ------------------------------------------------ */
 
 .icon-btn {

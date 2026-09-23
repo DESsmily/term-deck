@@ -117,6 +117,18 @@ export const store = {
   setActive(id: string): void {
     state.activeId = id;
   },
+  /**
+   * Rename a session: the sidebar label and the pane header (and the status bar,
+   * which reads the active session's title) stay in sync. An empty name is a no-op.
+   */
+  rename(id: string, name: string): void {
+    const s = state.sessions.find((x) => x.id === id);
+    const label = name.trim();
+    if (s && label) {
+      s.label = label;
+      s.title = label;
+    }
+  },
   setLayout(layout: LayoutMode): void {
     state.layout = layout;
   },

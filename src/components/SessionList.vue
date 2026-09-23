@@ -1,5 +1,36 @@
 <script setup lang="ts">
+import { nextTick, ref } from "vue";
 import { store } from "@/stores/termdeck";
+
+const editingId = ref<string | null>(null);
+const draft = ref("");
+
+// Only one input exists at a time, but it lives inside a v-for, so grab it with a
+// function ref rather than an array.
+let renameInput: HTMLInputElement | null = null;
+function captureInput(el: unknown) {
+  renameInput = el as HTMLInputElement | null;
+}
+
+async function startRename(id: string) {
+  const s = store.state.sessions.find((x) => x.id === id);
+  if (!s) return;
+  editingId.value = id;
+  draft.value = s.label;
+  await nextTick();
+  renameInput?.focus();
+  renameInput?.select();
+}
+
+function commit() {
+  if (editingId.value) store.rename(editingId.value, draft.value);
+  editingId.value = null;
+}
+
+// Clicking away discards the edit, so blur must not commit.
+function cancel() {
+  editingId.value = null;
+}
 </script>
 
 <template>
@@ -27,7 +58,21 @@ import { store } from "@/stores/termdeck";
         @click="store.setActive(s.id)"
       >
         <span class="dot" :class="s.status"></span>
-        <span class="label" :title="s.label">{{ s.label }}</span>
+        <input
+          v-if="editingId === s.id"
+          :ref="captureInput"
+          v-model="draft"
+          class="rename"
+          @keydown.enter="commit"
+          @blur="cancel"
+        />
+        <span
+          v-else
+          class="label"
+          :title="s.label"
+          @dblclick="startRename(s.id)"
+          >{{ s.label }}</span
+        >
         <button
           class="close"
           title="关闭终端"
@@ -146,6 +191,19 @@ import { store } from "@/stores/termdeck";
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  user-select: none;
+}
+.rename {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 6px;
+  font: inherit;
+  cursor: text;
+  color: var(--text);
+  background: var(--bg-elev-2);
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  outline: none;
 }
 .close {
   border: none;
