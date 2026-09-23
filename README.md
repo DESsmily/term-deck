@@ -1,7 +1,6 @@
 # TermDeck · 终端管理器
 
-一款基于 **Tauri v2 + Vue 3 + TypeScript** 的多终端管理桌面应用，
-根据提供的 UI 设计稿复刻实现。
+一款基于 **Tauri v2 + Vue 3 + TypeScript** 的多终端管理桌面应用。
 
 ## 功能特性
 
@@ -22,6 +21,44 @@
 - **复制终端** — 面板的"复制"按钮会在同一工作目录下新开一个终端。
 - **便携配置** — 设置和主题保存到可执行文件旁的 `termdeck.json`
   (若安装目录只读,则回退到应用数据目录)。
+
+## 界面预览
+
+以下截图取自浏览器预览模式(`pnpm dev`),终端内容由内置回声 Shell 生成。
+
+### 网格布局 · 深色主题(默认)
+
+四个终端面板平铺,左侧会话列表带实时状态点,底部状态栏显示终端数量与布局。
+
+![网格布局](docs/screenshots/grid-layout.png)
+
+### 水平分栏
+
+![水平分栏:两个终端左右并排](docs/screenshots/horizontal-split.png)
+
+### 拖拽重排
+
+抓住面板标题栏左侧的握把拖到另一个槽位,绿色"松手放置到此"即放置目标。
+
+![拖拽重排:目标槽位显示"松手放置到此"](docs/screenshots/drag-reorder.png)
+
+### 进程管理器
+
+名称 / PID / 监听端口 / 状态,支持搜索、多选与结束进程。
+
+![进程管理表格,已勾选一行](docs/screenshots/process-manager.png)
+
+### 设置
+
+为当前平台选择默认 Shell,并配置关闭按钮的行为。
+
+![设置弹窗:默认打开方式与关闭操作](docs/screenshots/settings.png)
+
+### 浅色主题
+
+终端配色随主题一起切换。
+
+![浅色主题下的网格布局](docs/screenshots/light-theme.png)
 
 ## 架构
 

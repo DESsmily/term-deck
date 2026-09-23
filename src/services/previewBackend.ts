@@ -60,21 +60,21 @@ function cmdOutput(cmd: string, cwd: string): string {
     case "ls":
       return "src  public  package.json  vite.config.ts";
     case "git status":
-      return "On branch main\nnothing to commit, working tree clean";
+      return "On branch main\r\nnothing to commit, working tree clean";
     case "docker ps":
       return "CONTAINER ID   IMAGE";
     case "top":
-      return "Tasks: 142 total,   1 running, 141 sleeping\n%Cpu(s):  6.2 us,  1.8 sy";
+      return "Tasks: 142 total,   1 running, 141 sleeping\r\n%Cpu(s):  6.2 us,  1.8 sy";
     case "pwd":
       return cwd;
     case "whoami":
       return "user";
     case "vite":
     case "npm run dev":
-      return "  VITE v5.4.0  ready\n  Local: http://localhost:5173";
+      return "  VITE v5.4.0  ready\r\n  Local: http://localhost:5173";
     case "python main.py":
     case "python app.py":
-      return "Flask app running on :5000\n * Debug mode: on";
+      return "Flask app running on :5000\r\n * Debug mode: on";
     case "help":
       return "TermDeck preview shell — try: ls -la, git status, docker ps, pwd, clear";
     default:
