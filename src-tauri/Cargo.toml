@@ -1,0 +1,32 @@
+[package]
+name = "term-deck"
+version = "0.1.0"
+description = "TermDeck — 终端管理器"
+authors = ["TermDeck"]
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "term_deck_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+portable-pty = "0.8"
+sysinfo = "0.32"
+parking_lot = "0.12"
+uuid = { version = "1", features = ["v4"] }
+base64 = "0.22"
+arboard = "3"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
